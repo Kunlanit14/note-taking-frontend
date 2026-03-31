@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <script src="https://unpkg.com/amazon-cognito-identity-js@6.3.0/dist/amazon-cognito-identity.min.js"></script>
+
+    <h2>Auth</h2>
+
+    <h3>Sign Up</h3>
+    <input id="su_username" placeholder="username">
+    <input id="su_email" placeholder="email">
+    <input id="su_password" placeholder="password">
+    <button onclick="signUp()">Sign Up</button>
+    <hr>
+
+    <h3>Confirm Code</h3>
+    <input id="cf_username" placeholder="username">
+    <input id="cf_code" placeholder="code">
+    <button onclick="confirmUser()">Confirm</button>
+
+    <hr>
+    <h3>Sign In</h3>
+    <input id="si_username" placeholder="username">
+    <input id="si_password" placeholder="password">
+    <button onclick="signIn()">Sign In</button>
+    <button onclick="logOut()">Log out</button>
+
+    <title>Notes App</title>
+</head>
+
+<body>
+<h2>Note App</h2>
+
+<input id="user_id" placeholder="user_id">
+<input id="noteId" placeholder="noteId">
+<input id="content" placeholder="content">
+
+
+<div>
+<button onclick="createNote()">Create</button>
+<button onclick="updateNote()">Update</button>
+<button onclick="deleteNote()">Delete</button>
+<button onclick="loadNotes()">Load Notes</button>
+
+</div>
+<h2>List Notes</h2>
+<ul id="list"></ul>
+
+<script>
+    const poolData = {
+        UserPoolId: "ap-southeast-7_hWCsJj83O",
+        ClientId: "1j8691rqpik4hghscvibfof80i"
+    };
+
+    const userPool = new AmazonCognitoIdentity.CognitoUserPool(poolData);
+
+    const API = "https://vgsag5x0v7.execute-api.ap-southeast-7.amazonaws.com/api/NoteTakingManager";
+
+    function signUp() {
+        const username = document.getElementById("su_username").value;
+        const email = document.getElementById("su_email").value;
+        const password = document.getElementById("su_password").value;
+
+        const attributeList = [];
+
+        const attributeEmail = new AmazonCognitoIdentity.CognitoUserAttribute({
+            Name: "email",
+            Value: email
+        });
+
+        attributeList.push(attributeEmail);
+
+        userPool.signUp(username, password, attributeList, null, function(err, result){
+            if(err) {
+                alert(err.message);
+                return;
+            }
+            alert("Sign up success! Check email for code.")
+        });
+    }
+
+    function confirmUser() {
+        const username = document.getElementById("cf_username").value;
+        const code = document.getElementById("cf_code").value;
+
+        const userData = {
+            Username: username,
+            Pool: userPool
+        };
+
+        const cognitoUser = new AmazonCognitoIdentity.CognitoUser(userData);
+
+        cognitoUser.confirmRegistration(code, true, function(err, result) {
+            if (err) {
+                alert(err.message);
+                return;
+            }
+            alert("Confirm success! Now login.");
+        });
+    }
+
+    function signIn() {
+        const username = document.getElementById("si_username").value;
+        const password = document.getElementById("si_password").value;
+
+        const authenticationDetails = new AmazonCognitoIdentity.AuthenticationDetails({
+            Username: username,
+            Password: password
+        });
+
+        const userData = {
+            Username: username,
+            Pool: userPool
+        };
+
+        const cognitoUser = new AmazonCognitoIdentity.CognitoUser(userData);
+
+        cognitoUser.authenticateUser(authenticationDetails, {
+            onSuccess: function(result) {
+                const token = result.getIdToken().getJwtToken();
+
+                console.log("TOKEN:", token);
+
+                localStorage.setItem("token", token);
+
+                alert("Login success!");
+            },
+            onFailure: function(err) {
+                alert(err.message);
+            }
+        });
+    }
+
+    function logOut() {
+        localStorage.removeItem("token");
+        alert("Logged out");
+    }
+
+    async function createNote() {
+        const token = localStorage.getItem("token");
+        const content = document.getElementById("content").value;
+
+        await fetch(API, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": token
+            },
+            body: JSON.stringify({content})
+        });
+        document.getElementById("content").value = "";
+        loadNotes();
+    }
+
+    
+
+    async function loadNotes() {
+        const token = localStorage.getItem("token");
+
+        const res = await fetch(API, {
+            headers: {
+                "Authorization": token
+            }
+        });
+
+        const data = await res.json();
+        const list = document.getElementById("list");
+        list.innerHTML = "";
+
+        data.forEach(n => {
+            const li = document.createElement("li");
+            li.innerText = `ID: ${n.user_id} - ${n.noteId} - ${n.content}`;
+            list.appendChild(li);
+        });
+    }
+
+    async function deleteNote() {
+        const token = localStorage.getItem("token");
+        const noteId =  document.getElementById("noteId").value;
+
+        
+        await fetch(API, {
+            method: "DELETE",
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": token
+            },
+            body: JSON.stringify({noteId})
+        });
+        document.getElementById("noteId").value = "";
+        loadNotes();
+
+    }
+
+    async function updateNote() {
+        const token = localStorage.getItem("token");
+        const noteId =  document.getElementById("noteId").value;
+        const content =  document.getElementById("content").value;
+
+
+        await fetch(API, {
+            method: "PUT",
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": token
+            },
+            body: JSON.stringify({noteId, content})
+        });
+        document.getElementById("noteId").value = "";
+        document.getElementById("content").value = "";
+        loadNotes();
+    }
+ 
+</script>
+</body>
+</html>
